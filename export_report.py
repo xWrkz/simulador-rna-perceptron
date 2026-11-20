@@ -1,8 +1,9 @@
 """Generador del Informe Técnico (Sesión 14 - UPN) en Word (.docx) y PDF (.pdf).
 
-Genera automáticamente las figuras de alta resolución a partir del modelo real
-en perceptron.py y construye ambos documentos con portada formal UPN, tablas
-estilizadas, ecuaciones destacadas y numeración de páginas.
+Enfocado directamente en el desarrollo práctico del ejercicio (sin marco teórico
+introductorio extenso), incorporando 4 figuras de alta resolución generadas
+desde perceptron.py — incluyendo el diagrama completo "Predicción del Perceptrón
+(¿cómo decide la neurona?)" junto con la función escalón hardlim.
 """
 
 from __future__ import annotations
@@ -12,18 +13,19 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
 from docx import Document
-from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
+from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import nsdecls, qn
 from docx.shared import Cm, Inches, Pt, RGBColor
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
@@ -41,7 +43,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from perceptron import PerceptronRNA, evaluate_manual_parameters
+from perceptron import PerceptronRNA, binarize_grades, evaluate_manual_parameters
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -53,6 +55,205 @@ PDF_PATH = BASE_DIR / "INFORME_TECNICO_RNA_PERCEPTRON.pdf"
 # ==========================================
 # 1. GENERACIÓN DE FIGURAS (MATPLOTLIB 200 DPI)
 # ==========================================
+def draw_perceptron_prediction_figure(model: PerceptronRNA, out_path: Path) -> None:
+    """Genera la figura 'Predicción del Perceptrón (¿cómo decide la neurona?)'
+    combinando el diagrama visual de la neurona (caso U1=14, U2=10, U3=12.5) y
+    la curva de activación escalón hardlim con el punto evaluado.
+    """
+    grades = (14.0, 10.0, 12.5)
+    x_bin = binarize_grades(grades)
+    y_pred, z_val = model.predict(x_bin)
+
+    fig = plt.figure(figsize=(10.2, 5.6), dpi=200, facecolor="white")
+    gs = fig.add_gridspec(2, 2, height_ratios=[1.55, 1.0], width_ratios=[1.25, 1.0], hspace=0.28, wspace=0.2)
+
+    # --- Panel Superior: Diagrama de la Neurona Artificial ---
+    ax = fig.add_subplot(gs[0, :])
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 42)
+    ax.axis("off")
+
+    # Títulos de columnas
+    col_headers = [
+        (10.5, "ENTRADAS (xᵢ)"),
+        (31.0, "PESOS (wᵢ · xᵢ)"),
+        (51.5, "SUMA PONDERADA"),
+        (71.5, "FUNCIÓN ESCALÓN"),
+        (90.0, "PREDICCIÓN (ŷ)"),
+    ]
+    for cx, title in col_headers:
+        ax.text(cx, 39.8, title, ha="center", va="center", fontsize=8.3, fontweight="bold", color="#64748B")
+
+    soma_cx, soma_cy = 51.5, 22.5
+    inputs_spec = [
+        ("U1", grades[0], int(x_bin[0]), float(model.w[0]), 33.0),
+        ("U2", grades[1], int(x_bin[1]), float(model.w[1]), 22.5),
+        ("U3", grades[2], int(x_bin[2]), float(model.w[2]), 12.0),
+    ]
+
+    for idx, (lbl, g, xv, wv, cy) in enumerate(inputs_spec, start=1):
+        active = xv == 1
+        bg = "#DCFCE7" if active else "#FEE2E2"
+        edge = "#15803D" if active else "#DC2626"
+        txt = "#166534" if active else "#991B1B"
+        lcol = "#10B981" if active else "#CBD5E1"
+        lstyle = "-" if active else "--"
+        lwidth = 2.6 if active else 1.6
+
+        # Caja de entrada
+        box = patches.FancyBboxPatch(
+            (3.0, cy - 3.6), 15.0, 7.2,
+            boxstyle="round,pad=0.4,rounding_size=1.5",
+            facecolor=bg, edgecolor=edge, linewidth=1.8, zorder=3,
+        )
+        ax.add_patch(box)
+        ax.text(10.5, cy + 1.3, f"{lbl}: {g:.1f} pts", ha="center", va="center", fontsize=8.6, fontweight="bold", color=txt, zorder=4)
+        ax.text(10.5, cy - 1.5, f"x{idx} = {xv}", ha="center", va="center", fontsize=9.5, fontweight="bold", color=txt, zorder=4)
+
+        # Flecha sináptica hacia el soma
+        ax.annotate(
+            "", xy=(soma_cx - 6.8, soma_cy), xytext=(18.5, cy),
+            arrowprops=dict(arrowstyle="-|>", color=lcol, lw=lwidth, ls=lstyle, mutation_scale=13),
+            zorder=2,
+        )
+
+        # Etiqueta del peso en el tramo sináptico
+        contrib = xv * wv
+        mx = 31.0
+        my = (cy + soma_cy) / 2.0 + (1.6 if idx == 1 else (-1.8 if idx == 3 else 1.5))
+        pill = patches.FancyBboxPatch(
+            (mx - 7.8, my - 1.8), 15.6, 3.6,
+            boxstyle="round,pad=0.2,rounding_size=1.4",
+            facecolor="#FFFFFF", edgecolor=lcol, linewidth=1.3, zorder=5,
+        )
+        ax.add_patch(pill)
+        ax.text(mx, my, f"w{idx}={wv:+.2f} → {contrib:+.2f}", ha="center", va="center", fontsize=8.0, fontweight="bold", color="#1E293B", zorder=6)
+
+    # Bias inferior
+    bias_box = patches.FancyBboxPatch(
+        (41.5, 2.0), 20.0, 5.8,
+        boxstyle="round,pad=0.3,rounding_size=1.4",
+        facecolor="#F5F3FF", edgecolor="#7C3AED", linewidth=1.6, zorder=3,
+    )
+    ax.add_patch(bias_box)
+    ax.text(51.5, 5.8, "Sesgo / Bias (x_b = 1)", ha="center", va="center", fontsize=8.0, fontweight="bold", color="#5B21B6", zorder=4)
+    ax.text(51.5, 3.4, f"b = {model.wb:+.2f}", ha="center", va="center", fontsize=8.8, fontweight="bold", color="#7C3AED", zorder=4)
+    ax.annotate(
+        "", xy=(soma_cx, soma_cy - 6.9), xytext=(51.5, 8.2),
+        arrowprops=dict(arrowstyle="-|>", color="#7C3AED", lw=2.2, mutation_scale=13),
+        zorder=2,
+    )
+
+    # Soma (círculo amarillo dorado)
+    soma = patches.Circle((soma_cx, soma_cy), radius=6.6, facecolor="#FEF3C7", edgecolor="#D97706", linewidth=2.4, zorder=4)
+    ax.add_patch(soma)
+    ax.text(soma_cx, soma_cy + 2.6, "Σ", ha="center", va="center", fontsize=14, fontweight="bold", color="#92400E", zorder=5)
+    ax.text(soma_cx, soma_cy - 0.3, "z (Net)", ha="center", va="center", fontsize=7.8, fontweight="bold", color="#78350F", zorder=5)
+    ax.text(soma_cx, soma_cy - 3.0, f"{z_val:+.2f}", ha="center", va="center", fontsize=10.5, fontweight="bold", color="#111827", zorder=5)
+
+    # Flecha Soma -> Activación
+    ax.annotate(
+        "", xy=(64.0, soma_cy), xytext=(soma_cx + 6.8, soma_cy),
+        arrowprops=dict(arrowstyle="-|>", color="#475569", lw=2.2, mutation_scale=13),
+        zorder=2,
+    )
+
+    # Caja función de activación hardlim
+    act_box = patches.FancyBboxPatch(
+        (64.5, soma_cy - 6.0), 14.0, 12.0,
+        boxstyle="round,pad=0.3,rounding_size=1.5",
+        facecolor="#F8FAFC", edgecolor="#334155", linewidth=1.8, zorder=3,
+    )
+    ax.add_patch(act_box)
+    ax.text(71.5, soma_cy + 4.1, "f(z) · hardlim", ha="center", va="center", fontsize=8.2, fontweight="bold", color="#334155", zorder=4)
+    # Mini escalón dentro de la caja
+    ax.plot([67.2, 75.8], [soma_cy - 1.6, soma_cy - 1.6], color="#94A3B8", lw=0.9, zorder=4)
+    ax.plot([71.5, 71.5], [soma_cy - 3.3, soma_cy + 2.4], color="#94A3B8", lw=0.9, zorder=4)
+    ax.plot([67.5, 71.5, 71.5, 75.5], [soma_cy - 1.6, soma_cy - 1.6, soma_cy + 1.6, soma_cy + 1.6], color="#10B981", lw=2.4, zorder=5)
+    ax.text(71.5, soma_cy - 4.5, "z ≥ 0 → 1", ha="center", va="center", fontsize=7.8, fontweight="bold", color="#047857", zorder=4)
+
+    # Flecha Activación -> Salida
+    out_col = "#10B981" if y_pred == 1 else "#EF4444"
+    out_bg = "#ECFDF5" if y_pred == 1 else "#FEF2F2"
+    ax.annotate(
+        "", xy=(82.2, soma_cy), xytext=(78.9, soma_cy),
+        arrowprops=dict(arrowstyle="-|>", color=out_col, lw=2.5, mutation_scale=13),
+        zorder=2,
+    )
+
+    # Caja de salida final
+    out_box = patches.FancyBboxPatch(
+        (82.6, soma_cy - 5.6), 14.8, 11.2,
+        boxstyle="round,pad=0.3,rounding_size=1.6",
+        facecolor=out_bg, edgecolor=out_col, linewidth=2.4, zorder=3,
+    )
+    ax.add_patch(out_box)
+    ax.text(90.0, soma_cy + 3.1, "Salida", ha="center", va="center", fontsize=8.3, fontweight="bold", color="#334155", zorder=4)
+    ax.text(90.0, soma_cy - 0.2, f"ŷ = {y_pred}", ha="center", va="center", fontsize=13.5, fontweight="bold", color=out_col, zorder=4)
+    ax.text(90.0, soma_cy - 3.4, "APROBADO (1)" if y_pred == 1 else "DESAPROBADO (0)", ha="center", va="center", fontsize=7.6, fontweight="bold", color=out_col, zorder=4)
+
+    # --- Panel Inferior Izquierdo: Bloques de cálculo + Dictamen ---
+    ax_txt = fig.add_subplot(gs[1, 0])
+    ax_txt.set_xlim(0, 100)
+    ax_txt.set_ylim(0, 42)
+    ax_txt.axis("off")
+
+    b1 = patches.FancyBboxPatch(
+        (1, 28), 98, 11, boxstyle="round,pad=0.3,rounding_size=1.8",
+        facecolor="#F8FAFC", edgecolor="#CBD5E1", linewidth=1.2,
+    )
+    ax_txt.add_patch(b1)
+    ax_txt.text(50, 33.5, "z = (1)(0.50) + (0)(0.50) + (1)(0.50) − 1.00 = +0.00", ha="center", va="center", fontsize=9.0, fontweight="bold", color="#111827")
+
+    b2 = patches.FancyBboxPatch(
+        (1, 15), 98, 10, boxstyle="round,pad=0.3,rounding_size=1.8",
+        facecolor="#F8FAFC", edgecolor="#CBD5E1", linewidth=1.2,
+    )
+    ax_txt.add_patch(b2)
+    ax_txt.text(50, 20.0, "Como z = +0.00 ≥ 0   →   ŷ = 1 (APROBADO)", ha="center", va="center", fontsize=9.2, fontweight="bold", color="#111827")
+
+    b3 = patches.FancyBboxPatch(
+        (1, 1.5), 98, 11, boxstyle="round,pad=0.3,rounding_size=1.8",
+        facecolor="#ECFDF5", edgecolor="#10B981", linewidth=1.8,
+    )
+    ax_txt.add_patch(b3)
+    ax_txt.text(50, 8.6, "ESTUDIANTE APROBADO (ŷ = 1)", ha="center", va="center", fontsize=9.4, fontweight="bold", color="#047857")
+    ax_txt.text(50, 4.3, "Tiene 2 de 3 unidades aprobadas (Patrón P6). Cada unidad aprobada suma +0.50.", ha="center", va="center", fontsize=7.6, color="#065F46")
+
+    # --- Panel Inferior Derecho: Función Escalón hardlim ---
+    ax_h = fig.add_subplot(gs[1, 1])
+    ax_h.axvspan(-2.2, 0, color="#EF4444", alpha=0.06)
+    ax_h.axvspan(0, 2.2, color="#10B981", alpha=0.07)
+    ax_h.plot([-2.2, 0], [0, 0], color="#EF4444", linewidth=2.8, label="Desaprobado (z < 0 → ŷ = 0)")
+    ax_h.plot([0, 2.2], [1, 1], color="#10B981", linewidth=2.8, label="Aprobado (z ≥ 0 → ŷ = 1)")
+    ax_h.scatter([0], [0], s=55, facecolor="white", edgecolor="#EF4444", linewidth=2.0, zorder=5)
+    ax_h.scatter([0], [1], s=55, facecolor="#10B981", edgecolor="#10B981", zorder=5)
+    ax_h.scatter([z_val], [y_pred], s=110, marker="D", facecolor="#F4B400", edgecolor="#10B981", linewidth=2.0, zorder=6, label="Estudiante actual")
+    ax_h.annotate(
+        f"z = {z_val:+.2f} → ŷ = {y_pred}",
+        xy=(z_val, y_pred), xytext=(0.45, 0.52),
+        arrowprops=dict(arrowstyle="->", color="#111827", lw=1.2),
+        fontsize=8.2, fontweight="bold", color="#111827",
+    )
+    ax_h.axvline(0, color="#94A3B8", linestyle=":", linewidth=1.1)
+    ax_h.set_title("Función de Activación Escalón (hardlim)", fontsize=9.2, fontweight="bold", color="#111827", pad=6)
+    ax_h.set_xlabel("Suma ponderada z (Net)", fontsize=8.2, color="#334155")
+    ax_h.set_ylabel("Predicción ŷ", fontsize=8.2, color="#334155")
+    ax_h.set_xlim(-2.2, 2.2)
+    ax_h.set_ylim(-0.28, 1.32)
+    ax_h.set_yticks([0, 1])
+    ax_h.tick_params(labelsize=8)
+    ax_h.grid(True, linestyle="--", alpha=0.5)
+    ax_h.spines["top"].set_visible(False)
+    ax_h.spines["right"].set_visible(False)
+
+    fig.suptitle("Predicción del Perceptrón (¿cómo decide la neurona?) — Caso U1=14.0, U2=10.0, U3=12.5",
+                 fontsize=11.0, fontweight="bold", color="#111827", y=0.98)
+    fig.subplots_adjust(left=0.04, right=0.97, top=0.91, bottom=0.10)
+    fig.savefig(out_path, dpi=200, facecolor="white")
+    plt.close(fig)
+
+
 def generate_figures(model: PerceptronRNA) -> dict[str, Path]:
     ASSETS_DIR.mkdir(exist_ok=True)
     epoch_df = model.get_epoch_summary_df()
@@ -71,7 +272,7 @@ def generate_figures(model: PerceptronRNA) -> dict[str, Path]:
 
     # --- Figura 1: Errores acumulados por época ---
     fig1_path = ASSETS_DIR / "fig1_errores_epoca.png"
-    fig, ax = plt.subplots(figsize=(7.2, 3.6), dpi=200)
+    fig, ax = plt.subplots(figsize=(7.2, 3.5), dpi=200)
     epochs = epoch_df["Época"].tolist()
     errors = epoch_df["Errores"].tolist()
     bar_colors = ["#10B981" if e == 0 else "#EF4444" for e in errors]
@@ -113,7 +314,7 @@ def generate_figures(model: PerceptronRNA) -> dict[str, Path]:
     w3 = [float(model.initial_w[2])] + history_df["w3_nuevo"].tolist()
     wb = [float(model.initial_wb)] + history_df["wb_nuevo"].tolist()
 
-    fig, ax = plt.subplots(figsize=(7.6, 3.8), dpi=200)
+    fig, ax = plt.subplots(figsize=(7.6, 3.7), dpi=200)
     ax.plot(pasos, w1, label="w1 (Unidad 1)", color="#2563EB", linewidth=2.1, marker="o", markersize=4.5)
     ax.plot(pasos, w2, label="w2 (Unidad 2)", color="#10B981", linewidth=2.1, linestyle="--", marker="s", markersize=4.2)
     ax.plot(pasos, w3, label="w3 (Unidad 3)", color="#F97316", linewidth=2.1, linestyle=":", marker="^", markersize=4.8)
@@ -138,14 +339,18 @@ def generate_figures(model: PerceptronRNA) -> dict[str, Path]:
     fig.savefig(fig2_path, dpi=200, facecolor="white")
     plt.close(fig)
 
-    # --- Figura 3: Experimento de sensibilidad del sesgo (3 escenarios) ---
-    fig3_path = ASSETS_DIR / "fig3_experimento_sesgo.png"
+    # --- Figura 3: Predicción del Perceptrón (¿cómo decide la neurona?) ---
+    fig3_path = ASSETS_DIR / "fig3_prediccion_perceptron.png"
+    draw_perceptron_prediction_figure(model, fig3_path)
+
+    # --- Figura 4: Experimento de sensibilidad del sesgo (3 escenarios) ---
+    fig4_path = ASSETS_DIR / "fig4_experimento_sesgo.png"
     scenarios = [
         ("Aprendido: b = -1.0\n(Regla >= 2 u. | 8/8 aciertos)", -1.0),
         ("Alterado: b = -0.5\n(Tipo OR | 5/8 aciertos)", -0.5),
         ("Alterado: b = -1.5\n(Tipo AND | 5/8 aciertos)", -1.5),
     ]
-    fig, axes = plt.subplots(1, 3, figsize=(9.2, 3.5), dpi=200, sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(9.2, 3.4), dpi=200, sharey=True)
     for ax, (title, b_val) in zip(axes, scenarios):
         df_s, _, _ = evaluate_manual_parameters(0.5, 0.5, 0.5, b_val)
         pats = df_s["Patrón"].tolist()
@@ -154,7 +359,6 @@ def generate_figures(model: PerceptronRNA) -> dict[str, Path]:
         ax.axhspan(0, 1.6, color="#10B981", alpha=0.06)
         ax.axhspan(-1.8, 0, color="#EF4444", alpha=0.05)
         ax.bar(pats, zs, color=cols, edgecolor="#1F2937", linewidth=0.6, zorder=3)
-        # Marcar explícitamente los puntos de error (especialmente los que caen exacto en z = 0)
         for p_idx, (z_v, ok) in enumerate(zip(zs, df_s["Acertó"])):
             if not ok:
                 ax.scatter([p_idx], [z_v], color="#DC2626", marker="X", s=65, edgecolor="white", linewidth=0.8, zorder=5)
@@ -171,10 +375,10 @@ def generate_figures(model: PerceptronRNA) -> dict[str, Path]:
     fig.suptitle("Experimento de Sensibilidad: Efecto de Modificar el Sesgo b (Verde = Acierto | Rojo = Error)",
                  fontsize=10.5, fontweight="bold", color="#111827", y=0.99)
     fig.tight_layout(rect=[0, 0, 1, 0.94])
-    fig.savefig(fig3_path, dpi=200, facecolor="white")
+    fig.savefig(fig4_path, dpi=200, facecolor="white")
     plt.close(fig)
 
-    return {"fig1": fig1_path, "fig2": fig2_path, "fig3": fig3_path}
+    return {"fig1": fig1_path, "fig2": fig2_path, "fig3": fig3_path, "fig4": fig4_path}
 
 
 # ==========================================
@@ -190,16 +394,6 @@ COVER_META = [
     ("Ciclo", "10mo ciclo"),
     ("Fecha", "Noviembre de 2026"),
     ("Tecnologías", "Python, Streamlit, NumPy, Pandas, Plotly / Altair"),
-]
-
-NOTATION_ROWS = [
-    ["Concepto", "Notación Sesión 14 (UPN)", "Notación Estándar"],
-    ["Suma ponderada", "Net", "z"],
-    ["Peso del sesgo / umbral", "wb (con entrada fija 1)", "b"],
-    ["Tasa o factor de aprendizaje", "fa", "eta (η)"],
-    ["Salida esperada (real)", "Yd", "y"],
-    ["Salida predicha", "y", "ŷ"],
-    ["Error de clasificación", "error = Yd - y", "e = y - ŷ"],
 ]
 
 TRUTH_TRAIN_ROWS = [
@@ -298,10 +492,7 @@ def add_docx_table(doc: Document, rows: list[list[str]], col_widths_cm: list[flo
             p = cell.paragraphs[0]
             p.paragraph_format.space_before = Pt(1)
             p.paragraph_format.space_after = Pt(1)
-            if r_idx == 0 or c_idx >= align_center_from:
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            else:
-                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER if (r_idx == 0 or c_idx >= align_center_from) else WD_ALIGN_PARAGRAPH.LEFT
 
             run = p.add_run(val)
             run.font.name = "Calibri"
@@ -333,7 +524,6 @@ def add_docx_heading(doc: Document, text: str, level: int = 1) -> None:
         run.font.name = "Calibri"
         run.font.size = Pt(14)
         run.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
-        # Borde inferior dorado estilo UPN
         pPr = p._p.get_or_add_pPr()
         pBdr = parse_xml(f'<w:pBdr {nsdecls("w")}><w:bottom w:val="single" w:sz="12" w:space="3" w:color="F4B400"/></w:pBdr>')
         pPr.append(pBdr)
@@ -436,7 +626,6 @@ def build_docx(figs: dict[str, Path]) -> None:
     section.right_margin = Cm(2.3)
     section.different_first_page_header_footer = True
 
-    # Encabezado y pie de página (páginas internas)
     hdr = section.header.paragraphs[0]
     hdr.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     r_hdr = hdr.add_run("UPN · Sistemas Inteligentes (Sesión 14) — Informe Técnico: Perceptrón Simple")
@@ -509,52 +698,23 @@ def build_docx(figs: dict[str, Path]) -> None:
     r_sub.font.size = Pt(10.5)
     r_sub.font.color.rgb = RGBColor(0x47, 0x55, 0x69)
 
-    # Tabla de datos de portada
     meta_rows = [["Campo", "Detalle"]] + [[k, v] for k, v in COVER_META]
     add_docx_table(doc, meta_rows, col_widths_cm=[5.5, 10.9], align_center_from=99)
-
     doc.add_page_break()
 
-    # ---------- CONTENIDO ----------
-    add_docx_heading(doc, "1. Marco Teórico y Fundamentos de Redes Neuronales Artificiales", 1)
+    # ---------- DESARROLLO DIRECTO DEL EJERCICIO ----------
+    add_docx_heading(doc, "1. Especificación de Reglas de Negocio y Preprocesamiento", 1)
     add_docx_body(
         doc,
-        "Las Redes Neuronales Artificiales (RNA) son modelos computacionales inspirados en la estructura y "
-        "funcionamiento del sistema nervioso biológico. Según la documentación académica de la Universidad Privada "
-        "del Norte (UPN), una RNA es una red interconectada masivamente en paralelo de elementos procesadores simples "
-        "y adaptativos con organización jerárquica, diseñada para interactuar con problemas reales emulando el "
-        "aprendizaje biológico.",
-    )
-
-    add_docx_heading(doc, "1.1 Analogía Biológica y Componentes de la Neurona Artificial", 2)
-    add_docx_bullet(doc, "Dendritas (Entradas y Pesos Sinápticos): ", "Reciben las señales de entrada xj, cada una ponderada por un peso sináptico wj que determina cuánto influye dicha unidad en la decisión.")
-    add_docx_bullet(doc, "Cuerpo Celular o Soma (Suma Ponderada y Activación): ", "Integra las señales ponderadas junto con un sesgo o bias (wb / b) y aplica una función de activación f(z) para decidir si dispara.")
-    add_docx_bullet(doc, "Axón (Salida): ", "Emite la respuesta final predicha ŷ = f(z) del modelo.")
-
-    add_docx_heading(doc, "1.2 Función de Activación Escalón y Aprendizaje Supervisado", 2)
-    add_docx_body(
-        doc,
-        "El Perceptrón clásico emplea la función de activación escalón o límite duro (hardlim), la cual devuelve 1 si "
-        "la suma ponderada es mayor o igual a 0, y 0 en caso contrario. Bajo el paradigma de Aprendizaje Supervisado, "
-        "cada patrón de entrada se empareja con una salida deseada Yd; al calcular el error (e = Yd - ŷ), la red "
-        "ajusta progresivamente sus pesos sinápticos y su sesgo hasta clasificar correctamente todos los casos.",
-    )
-
-    add_docx_heading(doc, "1.3 Equivalencia de Notaciones", 2)
-    add_docx_table(doc, NOTATION_ROWS, col_widths_cm=[6.2, 5.4, 4.8], align_center_from=1)
-
-    add_docx_heading(doc, "2. Especificación de Reglas de Negocio y Preprocesamiento", 1)
-    add_docx_body(
-        doc,
-        "El ejercicio de la Sesión 14 exige entrenar una RNA que determine la aprobación curricular de un estudiante "
-        "cumpliendo estrictamente cuatro indicadores:",
+        "El ejercicio de la Sesión 14 exige entrenar una Red Neuronal Artificial (Perceptrón Simple) que determine la "
+        "aprobación curricular de un estudiante cumpliendo estrictamente cuatro indicadores:",
     )
     add_docx_bullet(doc, "a. Tres promedios (3 unidades): ", "Se consideran exactamente 3 notas correspondientes a las unidades P1, P2 y P3.")
     add_docx_bullet(doc, "b. Mínimo 2 unidades aprobadas: ", "El estudiante aprueba la experiencia curricular solo si tiene al menos 2 unidades aprobadas.")
     add_docx_bullet(doc, "c. Sin cálculo matemático para el resultado final: ", "No se calcula promedio aritmético ni ponderado; se aplica únicamente la regla del punto b.")
     add_docx_bullet(doc, "d. Rango de 0 a 20 por unidad: ", "Cada promedio de unidad debe estar comprendido entre 0 y 20.")
 
-    add_docx_heading(doc, "2.1 Criterio de Binarización", 2)
+    add_docx_heading(doc, "1.1 Criterio de Binarización", 2)
     add_docx_body(
         doc,
         "Dado que la nota mínima aprobatoria universitaria es 11, cada nota continua Pi en [0, 20] se transforma "
@@ -569,15 +729,15 @@ def build_docx(figs: dict[str, Path]) -> None:
         ],
     )
 
-    add_docx_heading(doc, "3. Matriz de Patrones de Entrenamiento (Tabla de Verdad)", 1)
+    add_docx_heading(doc, "2. Matriz de Patrones de Entrenamiento (Tabla de Verdad)", 1)
     add_docx_body(doc, "Con 3 entradas binarias existen exactamente 2^3 = 8 patrones posibles de entrenamiento:")
     add_docx_table(doc, TRUTH_TRAIN_ROWS, col_widths_cm=[1.8, 1.9, 1.9, 1.9, 2.5, 1.8, 4.6], align_center_from=0)
 
-    add_docx_heading(doc, "4. Algoritmo de Entrenamiento (Regla Delta Generalizada)", 1)
+    add_docx_heading(doc, "3. Algoritmo de Entrenamiento (Regla Delta Generalizada)", 1)
     add_docx_body(
         doc,
-        "Durante cada época, el Perceptrón recorre secuencialmente los 8 patrones aplicando las ecuaciones de "
-        "propagación hacia adelante y corrección de pesos:",
+        "Durante cada época, el Perceptrón recorre secuencialmente los 8 patrones aplicando la suma ponderada "
+        "(Net o z), la función de activación escalón (hardlim) y la actualización de pesos y sesgo (wb o b) cuando existe error:",
     )
     add_docx_formula_box(
         doc,
@@ -589,51 +749,55 @@ def build_docx(figs: dict[str, Path]) -> None:
         ],
     )
 
-    add_docx_heading(doc, "5. Ejecución del Entrenamiento, Convergencia y Análisis", 1)
+    add_docx_heading(doc, "4. Ejecución del Entrenamiento, Convergencia y Predicción", 1)
     add_docx_body(
         doc,
         "Siguiendo la metodología UPN, se fijaron los parámetros iniciales w1 = 0.5, w2 = 0.5, w3 = 0.5, sesgo b = 0.5 "
         "y factor de aprendizaje fa = 0.5.",
     )
 
-    add_docx_heading(doc, "5.1 Resumen de Épocas (3 épocas x 8 patrones = 24 evaluaciones)", 2)
-    add_docx_bullet(doc, "Época 1 (Pasos 1 al 8 — 6 errores): ", "Se corrigen los parámetros en los patrones P1 (-1), P2 (-1), P3 (-1), P4 (+1), P5 (-1) y P6 (+1); P7 y P8 ya aciertan. Pesos al cierre: w = (0.50, 0.50, 1.00), b = -0.50.")
+    add_docx_heading(doc, "4.1 Resumen de Épocas (3 épocas × 8 patrones = 24 evaluaciones)", 2)
+    add_docx_bullet(doc, "Época 1 (Pasos 1 al 8 — 6 errores): ", "Se corrigen los parámetros en P1 (-1), P2 (-1), P3 (-1), P4 (+1), P5 (-1) y P6 (+1); P7 y P8 ya aciertan. Cierra con w = (0.50, 0.50, 1.00) y b = -0.50.")
     add_docx_bullet(doc, "Época 2 (Pasos 9 al 16 — 1 error): ", "Únicamente falla P2 (0, 0, 1) en la evaluación 10 de 24 (z = +0.50 -> ŷ = 1, e = -1). El ajuste fija w3 = 0.50 y b = -1.00; desde P3 hasta P8 todos aciertan.")
-    add_docx_bullet(doc, "Época 3 (Pasos 17 al 24 — 0 errores): ", "Se verifican nuevamente los 8 patrones obteniendo 0 errores y 100 % de precisión, finalizando el entrenamiento por convergencia.")
+    add_docx_bullet(doc, "Época 3 (Pasos 17 al 24 — 0 errores): ", "Se verifican los 8 patrones obteniendo 0 errores y 100 % de precisión, finalizando el entrenamiento por convergencia.")
 
     add_docx_table(doc, EPOCH_SUMMARY_ROWS, col_widths_cm=[1.7, 1.8, 2.0, 2.3, 2.1, 2.1, 2.1, 2.3], align_center_from=0)
-    add_docx_figure(doc, figs["fig1"], "Figura 1. Evolución de los errores cometidos por la red neuronal en cada época hasta converger en 0.", 5.6)
-    add_docx_figure(doc, figs["fig2"], "Figura 2. Trayectoria paso a paso de los pesos sinápticos (w1, w2, w3) y del sesgo (b) en las 24 evaluaciones.", 6.0)
+    add_docx_figure(doc, figs["fig1"], "Figura 1. Errores cometidos por la red neuronal en cada época hasta alcanzar convergencia (0 errores).", 5.6)
+    add_docx_figure(doc, figs["fig2"], "Figura 2. Evolución paso a paso de los pesos sinápticos (w1, w2, w3) y el sesgo (b) en las 24 evaluaciones.", 6.0)
 
-    add_docx_heading(doc, "5.2 Modelo Matemático Aprendido y Verificación Final", 2)
-    add_docx_formula_box(doc, ["z = 0.50·x1 + 0.50·x2 + 0.50·x3 - 1.00"])
+    add_docx_heading(doc, "4.2 Modelo Matemático Aprendido y Verificación Final", 2)
+    add_docx_formula_box(doc, ["z = 0.50·x1 + 0.50·x2 + 0.50·x3 − 1.00"])
     add_docx_body(
         doc,
-        "Interpretación intuitiva: cada unidad aprobada aporta +0.50 puntos y el sesgo (-1.00) establece el umbral "
+        "Interpretación práctica: cada unidad aprobada aporta +0.50 puntos y el sesgo (-1.00) establece el requisito "
         "mínimo. Con 0 o 1 unidad aprobada la suma resulta negativa (-1.00 o -0.50 -> Desaprobado); con 2 o 3 "
         "unidades aprobadas alcanza 0.00 o +0.50 -> Aprobado.",
     )
     add_docx_table(doc, VERIFY_ROWS, col_widths_cm=[1.6, 3.0, 2.3, 2.2, 2.2, 1.5, 3.6], align_center_from=0)
 
-    add_docx_heading(doc, "5.3 Experimento de Sensibilidad sobre el Sesgo (b)", 2)
+    add_docx_heading(doc, "4.3 Predicción del Perceptrón (¿cómo decide la neurona?)", 2)
+    add_docx_body(
+        doc,
+        "Una vez entrenada la red, la Figura 3 ilustra en vivo cómo decide la neurona para un caso práctico "
+        "(U1 = 14.0, U2 = 10.0, U3 = 12.5): las notas se binarizan a (1, 0, 1), se multiplican por sus pesos "
+        "(0.50 cada uno), se resta el sesgo (-1.00) obteniendo z = 0.00 y la función escalón (hardlim) dispara ŷ = 1 (APROBADO).",
+    )
+    add_docx_figure(doc, figs["fig3"], "Figura 3. Predicción del Perceptrón (¿cómo decide la neurona?) mostrando entradas binarizadas, pesos, suma ponderada, función escalón hardlim y dictamen final.", 6.4)
+
+    add_docx_heading(doc, "4.4 Experimento de Sensibilidad sobre el Sesgo (b)", 2)
     add_docx_body(
         doc,
         "Para comprobar el papel determinante del sesgo en la clasificación, se varió manualmente b manteniendo "
-        "w1 = w2 = w3 = 0.50. Como muestra la tabla y la Figura 3, cambiar b desplaza la frontera z = 0 y rompe la "
+        "w1 = w2 = w3 = 0.50. Como muestra la tabla y la Figura 4, cambiar b desplaza la frontera z = 0 y rompe la "
         "regla de negocio convirtiendo la neurona en una compuerta OR o AND:",
     )
     add_docx_table(doc, SENSITIVITY_ROWS, col_widths_cm=[3.8, 4.6, 2.0, 1.8, 4.2], align_center_from=2)
-    add_docx_figure(doc, figs["fig3"], "Figura 3. Comparación visual del experimento de sensibilidad al modificar el sesgo b respecto a z = 0.", 6.3)
+    add_docx_figure(doc, figs["fig4"], "Figura 4. Experimento de sensibilidad al modificar el sesgo b frente a la frontera z = 0 (Verde = Acierto | Rojo = Error).", 6.3)
 
-    add_docx_heading(doc, "6. Validación de los 4 Indicadores del Ejercicio", 1)
-    add_docx_body(
-        doc,
-        "La siguiente matriz resume cómo el modelo entrenado y el simulador garantizan y comprueban en vivo cada "
-        "uno de los 4 indicadores de la Sesión 14:",
-    )
+    add_docx_heading(doc, "5. Validación de los 4 Indicadores del Ejercicio", 1)
     add_docx_table(doc, INDICATORS_ROWS, col_widths_cm=[4.2, 5.7, 6.5], align_center_from=99)
 
-    add_docx_heading(doc, "7. Arquitectura del Simulador Interactivo en Streamlit", 1)
+    add_docx_heading(doc, "6. Arquitectura del Simulador Interactivo en Streamlit", 1)
     add_docx_body(
         doc,
         "La solución fue implementada en Python bajo una arquitectura modular de tres archivos integrados con "
@@ -641,13 +805,13 @@ def build_docx(figs: dict[str, Path]) -> None:
     )
     add_docx_bullet(doc, "perceptron.py (Capa de Modelo): ", "Implementa la clase PerceptronRNA, la binarización binarize_grades(), el registro completo de las 24 iteraciones y evaluate_manual_parameters() para el experimento de sensibilidad.")
     add_docx_bullet(doc, "visualizations.py (Capa de Visualización): ", "Genera el diagrama SVG dinámico en vivo de la neurona y los gráficos interactivos de errores por época, evolución de pesos, función escalón hardlim y comparación del experimento con el sesgo.")
-    add_docx_bullet(doc, "app.py (Capa de Interfaz Web): ", "Estructura la aplicación en 4 pestañas pedagógicas: (1) Simulador en vivo y verificación de reglas a-d, (2) Entrenamiento paso a paso con selector de Época y Patrón + exportación CSV, (3) Modelo aprendido y experimento interactivo con el sesgo, y (4) Resumen teórico con equivalencia de notaciones.")
+    add_docx_bullet(doc, "app.py (Capa de Interfaz Web): ", "Estructura la aplicación en 4 pestañas pedagógicas: (1) Simulador en vivo y verificación de reglas a-d, (2) Entrenamiento paso a paso con selector de Época y Patrón + exportación CSV, (3) Modelo aprendido y experimento interactivo con el sesgo, y (4) Resumen teórico.")
 
-    add_docx_heading(doc, "8. Conclusiones", 1)
+    add_docx_heading(doc, "7. Conclusiones", 1)
     add_docx_bullet(doc, "Convergencia rápida y exacta: ", "El criterio de mayoría (>= 2 de 3 unidades aprobadas) es linealmente separable, permitiendo que el Perceptrón converja al 100 % de precisión en solo 3 épocas (24 evaluaciones) con w = (0.50, 0.50, 0.50) y b = -1.00.")
     add_docx_bullet(doc, "Cumplimiento estricto sin promedio aritmético: ", "La binarización previa (Pi >= 11) asegura que la red evalúe únicamente la cantidad de unidades aprobadas, comprobado con los contraejemplos (11, 11, 0) y (20, 10.5, 10.5).")
     add_docx_bullet(doc, "Importancia crítica del sesgo: ", "Modificar el sesgo aprendido b = -1.00 hacia -0.50 o -1.50 altera la frontera z = 0 y produce 3 errores sobre los 8 casos posibles.")
-    add_docx_bullet(doc, "Valor pedagógico del simulador web: ", "El despliegue interactivo en Streamlit con diagrama dinámico, recorrido por época/patrón y experimentos en tiempo real hace comprensible y verificable todo el proceso de aprendizaje de la RNA.")
+    add_docx_bullet(doc, "Valor pedagógico del simulador web: ", "El despliegue interactivo en Streamlit con diagrama dinámico, recorrido por época/patrón y experimentos en tiempo real hace comprensible y verificable todo el proceso de decisión de la RNA.")
 
     doc.save(DOCX_PATH)
 
@@ -656,7 +820,6 @@ def build_docx(figs: dict[str, Path]) -> None:
 # 4. EXPORTADOR A PDF (.PDF CON REPORTLAB)
 # ==========================================
 def register_unicode_fonts() -> tuple[str, str, str, str]:
-    """Registra fuentes DejaVu (incluidas con Matplotlib) para soporte Unicode completo (ŷ, η, ≥, →)."""
     font_dir = Path(matplotlib.get_data_path()) / "fonts" / "ttf"
     reg_path = font_dir / "DejaVuSans.ttf"
     bold_path = font_dir / "DejaVuSans-Bold.ttf"
@@ -680,7 +843,6 @@ def draw_pdf_header_footer(canvas, doc) -> None:
         return
     canvas.saveState()
     w, h = A4
-    # Línea superior dorada + texto encabezado
     canvas.setStrokeColor(colors.HexColor("#F4B400"))
     canvas.setLineWidth(1.2)
     canvas.line(2.0 * cm, h - 1.65 * cm, w - 2.0 * cm, h - 1.65 * cm)
@@ -691,7 +853,6 @@ def draw_pdf_header_footer(canvas, doc) -> None:
         h - 1.45 * cm,
         "UPN · Sistemas Inteligentes (Sesión 14) — Informe Técnico: Perceptrón Simple",
     )
-    # Pie de página con número de página
     canvas.setStrokeColor(colors.HexColor("#E2E8F0"))
     canvas.setLineWidth(0.7)
     canvas.line(2.0 * cm, 1.65 * cm, w - 2.0 * cm, 1.65 * cm)
@@ -708,7 +869,7 @@ def build_pdf(figs: dict[str, Path]) -> None:
         topMargin=2.1 * cm,
         bottomMargin=2.1 * cm,
         title="Informe Técnico: Perceptrón Simple - Sesión 14 UPN",
-        author="UPN - Sistemas Inteligentes",
+        author="Marco Antonio Gamez Monzon",
     )
 
     styles = getSampleStyleSheet()
@@ -940,47 +1101,21 @@ def build_pdf(figs: dict[str, Path]) -> None:
     story.append(make_table(meta_rows, [5.4, 11.6], center_from=99))
     story.append(PageBreak())
 
-    # ---------- CONTENIDO ----------
-    story.append(make_h1("1. Marco Teórico y Fundamentos de Redes Neuronales Artificiales"))
+    # ---------- DESARROLLO DIRECTO DEL EJERCICIO ----------
+    story.append(make_h1("1. Especificación de Reglas de Negocio y Preprocesamiento"))
     story.append(
         Paragraph(
-            "Las Redes Neuronales Artificiales (RNA) son modelos computacionales inspirados en la estructura y "
-            "funcionamiento del sistema nervioso biológico. Según la documentación académica de la Universidad Privada "
-            "del Norte (UPN), una RNA es una red interconectada masivamente en paralelo de elementos procesadores simples "
-            "y adaptativos con organización jerárquica, diseñada para interactuar con problemas reales emulando el "
-            "aprendizaje biológico.",
+            "El ejercicio de la Sesión 14 plantea entrenar un Perceptrón Simple que determine si un estudiante aprueba "
+            "o no una experiencia curricular cumpliendo estrictamente cuatro indicadores:",
             s_body,
         )
     )
-
-    story.append(Paragraph("1.1 Analogía Biológica y Componentes de la Neurona Artificial", s_h2))
-    story.append(Paragraph("• <b>Dendritas (Entradas y Pesos Sinápticos):</b> Reciben las señales de entrada x<sub>j</sub>, cada una ponderada por un peso sináptico w<sub>j</sub> que determina cuánto influye en la decisión.", s_bullet))
-    story.append(Paragraph("• <b>Cuerpo Celular o Soma (Suma Ponderada y Activación):</b> Integra las señales ponderadas junto con un sesgo o <i>bias</i> (w<sub>b</sub> / b) y aplica una función de activación f(z).", s_bullet))
-    story.append(Paragraph("• <b>Axón (Salida):</b> Emite la respuesta final predicha ŷ = f(z) del sistema.", s_bullet))
-
-    story.append(Paragraph("1.2 Función de Activación Escalón y Aprendizaje Supervisado", s_h2))
-    story.append(
-        Paragraph(
-            "El Perceptrón clásico utiliza la función escalón (<b>hardlim</b>), que devuelve 1 si la suma ponderada "
-            "es mayor o igual a 0, y 0 en caso contrario. Mediante Aprendizaje Supervisado, cada patrón de entrada se "
-            "empareja con su salida deseada Y<sub>d</sub>; al calcular el error (e = Y<sub>d</sub> − ŷ), la red corrige "
-            "iterativamente sus pesos y su sesgo hasta alcanzar cero errores.",
-            s_body,
-        )
-    )
-
-    story.append(Paragraph("1.3 Equivalencia de Notaciones", s_h2))
-    story.append(make_table(NOTATION_ROWS, [6.4, 5.8, 4.8], center_from=1))
-    story.append(Spacer(1, 6))
-
-    story.append(make_h1("2. Especificación de Reglas de Negocio y Preprocesamiento"))
-    story.append(Paragraph("El ejercicio de la Sesión 14 establece cuatro indicadores de cumplimiento obligatorio:", s_body))
     story.append(Paragraph("• <b>a. Tres promedios (3 unidades):</b> Se consideran exactamente 3 notas (P<sub>1</sub>, P<sub>2</sub>, P<sub>3</sub>).", s_bullet))
     story.append(Paragraph("• <b>b. Mínimo 2 unidades aprobadas:</b> El estudiante aprueba el curso si aprueba al menos 2 de las 3 unidades.", s_bullet))
     story.append(Paragraph("• <b>c. Sin cálculo matemático de promedio final:</b> No se aplica promedio aritmético ni ponderado; solo rige el punto b.", s_bullet))
     story.append(Paragraph("• <b>d. Rango de 0 a 20 por unidad:</b> Cada promedio se restringe estrictamente al intervalo [0, 20].", s_bullet))
 
-    story.append(Paragraph("2.1 Criterio de Binarización", s_h2))
+    story.append(Paragraph("1.1 Criterio de Binarización", s_h2))
     story.append(
         Paragraph(
             "Con la nota mínima aprobatoria universitaria de 11, cada promedio continuo P<sub>i</sub> se binariza "
@@ -999,44 +1134,66 @@ def build_pdf(figs: dict[str, Path]) -> None:
     )
     story.append(Spacer(1, 6))
 
-    story.append(make_h1("3. Matriz de Patrones de Entrenamiento (Tabla de Verdad)"))
-    story.append(Paragraph("Con 3 entradas binarias se generan 2<super>3</super> = 8 patrones posibles:", s_body))
-    story.append(make_table(TRUTH_TRAIN_ROWS, [1.8, 2.0, 2.0, 2.0, 2.6, 1.8, 4.8], center_from=0))
-    story.append(Spacer(1, 6))
-
-    story.append(make_h1("4. Algoritmo de Entrenamiento (Regla Delta Generalizada)"))
     story.append(
-        make_formula_box(
+        KeepTogether(
             [
-                "Suma ponderada:      z (Net) = x1*w1 + x2*w2 + x3*w3 + 1*b",
-                "Activación hardlim:  y_hat = 1 si z >= 0,   y_hat = 0 si z < 0",
-                "Error:               e = Yd - y_hat",
-                "Actualización (e!=0): wi(t+1) = wi(t) + fa*e*xi   |   b(t+1) = b(t) + fa*e",
+                Paragraph("2. Matriz de Patrones de Entrenamiento (Tabla de Verdad)", s_h1),
+                HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#F4B400"), spaceAfter=6),
+                Paragraph("Con 3 entradas binarias se generan 2<super>3</super> = 8 patrones posibles:", s_body),
+                make_table(TRUTH_TRAIN_ROWS, [1.8, 2.0, 2.0, 2.0, 2.6, 1.8, 4.8], center_from=0),
+                Spacer(1, 6),
             ]
         )
     )
-    story.append(Spacer(1, 6))
-
-    story.append(make_h1("5. Ejecución del Entrenamiento, Convergencia y Análisis"))
-    story.append(
-        Paragraph(
-            "Con la inicialización oficial UPN (w<sub>1</sub> = w<sub>2</sub> = w<sub>3</sub> = 0.5, sesgo b = 0.5 y "
-            "fa = 0.5), la red completa <b>3 épocas × 8 patrones = 24 evaluaciones</b> hasta converger con 0 errores:",
-            s_body,
-        )
-    )
-    story.append(Paragraph("• <b>Época 1 (Pasos 1–8 · 6 errores):</b> Corrige pesos en P1, P2, P3, P4, P5 y P6; cierra con w = (0.50, 0.50, 1.00) y b = -0.50.", s_bullet))
-    story.append(Paragraph("• <b>Época 2 (Pasos 9–16 · 1 error):</b> Solo falla P2 (evaluación 10 de 24), ajustando w<sub>3</sub> = 0.50 y b = -1.00.", s_bullet))
-    story.append(Paragraph("• <b>Época 3 (Pasos 17–24 · 0 errores):</b> Verifica los 8 patrones con 100 % de precisión y finaliza el entrenamiento.", s_bullet))
-    story.append(Spacer(1, 4))
-    story.append(make_table(EPOCH_SUMMARY_ROWS, [1.8, 1.9, 2.1, 2.4, 2.2, 2.2, 2.2, 2.2], center_from=0))
-    story.append(make_figure(figs["fig1"], "Figura 1. Errores acumulados por época hasta alcanzar convergencia (0 errores en Época 3).", 14.5))
-    story.append(make_figure(figs["fig2"], "Figura 2. Evolución paso a paso de los pesos sinápticos (w1, w2, w3) y el sesgo (b) en las 24 evaluaciones.", 15.6))
 
     story.append(
         KeepTogether(
             [
-                Paragraph("5.2 Modelo Matemático Aprendido y Verificación Final", s_h2),
+                Paragraph("3. Algoritmo de Entrenamiento (Regla Delta Generalizada)", s_h1),
+                HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#F4B400"), spaceAfter=6),
+                Paragraph(
+                    "En cada época el Perceptrón recorre los 8 patrones calculando la suma ponderada z (Net), la "
+                    "activación escalón hardlim y la corrección de pesos y sesgo b (w<sub>b</sub>) cuando hay error:",
+                    s_body,
+                ),
+                make_formula_box(
+                    [
+                        "Suma ponderada:      z (Net) = x1·w1 + x2·w2 + x3·w3 + 1·b",
+                        "Activación hardlim:  ŷ = 1 si z >= 0,   ŷ = 0 si z < 0",
+                        "Error:               e = Yd − ŷ",
+                        "Actualización (e≠0): wi(t+1) = wi(t) + fa·e·xi   |   b(t+1) = b(t) + fa·e",
+                    ]
+                ),
+                Spacer(1, 6),
+            ]
+        )
+    )
+
+    story.append(
+        KeepTogether(
+            [
+                Paragraph("4. Ejecución del Entrenamiento, Convergencia y Predicción", s_h1),
+                HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#F4B400"), spaceAfter=6),
+                Paragraph(
+                    "Con la inicialización oficial UPN (w<sub>1</sub> = w<sub>2</sub> = w<sub>3</sub> = 0.5, sesgo b = 0.5 y "
+                    "fa = 0.5), la red completa <b>3 épocas × 8 patrones = 24 evaluaciones</b> hasta converger con 0 errores:",
+                    s_body,
+                ),
+                Paragraph("• <b>Época 1 (Pasos 1–8 · 6 errores):</b> Corrige pesos en P1, P2, P3, P4, P5 y P6; cierra con w = (0.50, 0.50, 1.00) y b = -0.50.", s_bullet),
+                Paragraph("• <b>Época 2 (Pasos 9–16 · 1 error):</b> Solo falla P2 (evaluación 10 de 24), ajustando w<sub>3</sub> = 0.50 y b = -1.00.", s_bullet),
+                Paragraph("• <b>Época 3 (Pasos 17–24 · 0 errores):</b> Verifica los 8 patrones con 100 % de precisión y finaliza el entrenamiento.", s_bullet),
+                Spacer(1, 4),
+                make_table(EPOCH_SUMMARY_ROWS, [1.8, 1.9, 2.1, 2.4, 2.2, 2.2, 2.2, 2.2], center_from=0),
+            ]
+        )
+    )
+    story.append(make_figure(figs["fig1"], "Figura 1. Errores acumulados por época hasta alcanzar convergencia (0 errores en Época 3).", 14.2))
+    story.append(make_figure(figs["fig2"], "Figura 2. Evolución paso a paso de los pesos sinápticos (w1, w2, w3) y el sesgo (b) en las 24 evaluaciones.", 15.4))
+
+    story.append(
+        KeepTogether(
+            [
+                Paragraph("4.2 Modelo Matemático Aprendido y Verificación Final", s_h2),
                 make_formula_box(["z = 0.50·x1 + 0.50·x2 + 0.50·x3 − 1.00"]),
                 Spacer(1, 4),
                 Paragraph(
@@ -1051,21 +1208,45 @@ def build_pdf(figs: dict[str, Path]) -> None:
         )
     )
 
-    story.append(Paragraph("5.3 Experimento de Sensibilidad sobre el Sesgo (b)", s_h2))
     story.append(
-        Paragraph(
-            "Manteniendo w<sub>1</sub> = w<sub>2</sub> = w<sub>3</sub> = 0.50, se probó alterar manualmente el sesgo b "
-            "para verificar su impacto sobre la clasificación de los 8 patrones:",
-            s_body,
+        KeepTogether(
+            [
+                Paragraph("4.3 Predicción del Perceptrón (¿cómo decide la neurona?)", s_h2),
+                Paragraph(
+                    "La <b>Figura 3</b> muestra el proceso completo de decisión de la neurona para un estudiante con "
+                    "notas U<sub>1</sub> = 14.0, U<sub>2</sub> = 10.0 y U<sub>3</sub> = 12.5: sus entradas se binarizan "
+                    "a (1, 0, 1), los pesos aportan +0.50 + 0.00 + 0.50, el sesgo resta −1.00 dando z = 0.00 y la "
+                    "función escalón (hardlim) activa ŷ = 1 (<b>APROBADO</b>).",
+                    s_body,
+                ),
+                make_figure(
+                    figs["fig3"],
+                    "Figura 3. Predicción del Perceptrón (¿cómo decide la neurona?): entradas binarizadas, pesos, suma ponderada, función escalón hardlim y dictamen.",
+                    15.6,
+                ),
+            ]
         )
     )
-    story.append(make_table(SENSITIVITY_ROWS, [4.0, 4.8, 2.1, 1.9, 4.2], center_from=2))
-    story.append(make_figure(figs["fig3"], "Figura 3. Efecto de modificar el sesgo b frente a la frontera z = 0 (Verde = Acierto | Rojo = Error).", 16.4))
 
     story.append(
         KeepTogether(
             [
-                Paragraph("6. Validación de los 4 Indicadores del Ejercicio", s_h1),
+                Paragraph("4.4 Experimento de Sensibilidad sobre el Sesgo (b)", s_h2),
+                Paragraph(
+                    "Manteniendo w<sub>1</sub> = w<sub>2</sub> = w<sub>3</sub> = 0.50, se probó alterar manualmente el sesgo b "
+                    "para verificar su impacto sobre la clasificación de los 8 patrones:",
+                    s_body,
+                ),
+                make_table(SENSITIVITY_ROWS, [4.0, 4.8, 2.1, 1.9, 4.2], center_from=2),
+                make_figure(figs["fig4"], "Figura 4. Efecto de modificar el sesgo b frente a la frontera z = 0 (Verde = Acierto | Rojo = Error).", 16.2),
+            ]
+        )
+    )
+
+    story.append(
+        KeepTogether(
+            [
+                Paragraph("5. Validación de los 4 Indicadores del Ejercicio", s_h1),
                 HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#F4B400"), spaceAfter=6),
                 make_table(INDICATORS_ROWS, [4.2, 5.8, 7.0], center_from=99),
                 Spacer(1, 6),
@@ -1073,7 +1254,7 @@ def build_pdf(figs: dict[str, Path]) -> None:
         )
     )
 
-    story.append(make_h1("7. Arquitectura del Simulador Interactivo en Streamlit"))
+    story.append(make_h1("6. Arquitectura del Simulador Interactivo en Streamlit"))
     story.append(
         Paragraph(
             "La aplicación se estructuró de manera modular en tres módulos Python integrados con Streamlit, NumPy, "
@@ -1085,25 +1266,40 @@ def build_pdf(figs: dict[str, Path]) -> None:
     story.append(Paragraph("• <b>visualizations.py:</b> Diagrama SVG dinámico de la neurona, gráficos de errores por época, evolución de pesos, función escalón hardlim y gráfico comparativo del experimento de sesgo.", s_bullet))
     story.append(Paragraph("• <b>app.py:</b> Interfaz de 4 pestañas: (1) Simulador en vivo + panel de reglas a–d, (2) Entrenamiento paso a paso por Época y Patrón + descarga CSV, (3) Modelo aprendido y experimento con el sesgo, y (4) Resumen teórico.", s_bullet))
 
-    story.append(make_h1("8. Conclusiones"))
+    story.append(make_h1("7. Conclusiones"))
     story.append(Paragraph("• <b>Convergencia exacta:</b> El problema de mayoría (&gt;= 2 de 3 unidades) es linealmente separable y converge al 100 % en 3 épocas (24 evaluaciones) con w = (0.50, 0.50, 0.50) y b = -1.00.", s_bullet))
     story.append(Paragraph("• <b>Cumplimiento riguroso de reglas:</b> La binarización previa garantiza que no intervenga el promedio aritmético, validado mediante los contraejemplos (11, 11, 0) y (20, 10.5, 10.5).", s_bullet))
     story.append(Paragraph("• <b>Papel clave del sesgo:</b> Alterar b = -1.00 a -0.50 o -1.50 desplaza la frontera z = 0 y produce 3 errores al convertir la neurona en compuertas OR o AND.", s_bullet))
-    story.append(Paragraph("• <b>Valor pedagógico:</b> El simulador web en Streamlit permite visualizar, recorrer paso a paso y sustentar de manera clara cada etapa del Perceptrón.", s_bullet))
+    story.append(Paragraph("• <b>Valor pedagógico:</b> El simulador web en Streamlit permite visualizar, recorrer paso a paso y sustentar de manera clara cada etapa de decisión del Perceptrón.", s_bullet))
 
     doc.build(story, onFirstPage=draw_pdf_header_footer, onLaterPages=draw_pdf_header_footer)
 
 
 def main() -> None:
+    global DOCX_PATH, PDF_PATH
     model = PerceptronRNA()
     epochs, converged = model.train()
     assert epochs == 3 and converged, "El modelo debe converger en 3 épocas con parámetros UPN."
 
     figs = generate_figures(model)
-    build_docx(figs)
-    build_pdf(figs)
-    print(f"OK DOCX: {DOCX_PATH}")
-    print(f"OK PDF : {PDF_PATH}")
+
+    try:
+        build_docx(figs)
+        print(f"OK DOCX: {DOCX_PATH}")
+    except PermissionError:
+        alt_docx = BASE_DIR / "INFORME_TECNICO_RNA_PERCEPTRON_ACTUALIZADO.docx"
+        DOCX_PATH = alt_docx
+        build_docx(figs)
+        print(f"OK DOCX (original abierto en Word): {DOCX_PATH}")
+
+    try:
+        build_pdf(figs)
+        print(f"OK PDF : {PDF_PATH}")
+    except PermissionError:
+        alt_pdf = BASE_DIR / "INFORME_TECNICO_RNA_PERCEPTRON_ACTUALIZADO.pdf"
+        PDF_PATH = alt_pdf
+        build_pdf(figs)
+        print(f"OK PDF (original abierto): {PDF_PATH}")
 
 
 if __name__ == "__main__":
