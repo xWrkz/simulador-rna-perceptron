@@ -37,9 +37,9 @@ El ejercicio propuesto en la Sesión 14 exige entrenar una Red Neuronal Artifici
 
 ### 1.1 Criterio de Binarización
 
-Considerando la nota mínima aprobatoria universitaria estándar de $11$, se aplica una transformación discreta previa a la entrada del Perceptrón para mapear cada promedio continuo $P_i \in [0, 20]$ a una variable binaria $x_i \in \{0, 1\}$:
+Considerando la nota mínima aprobatoria en la UPN de $12$, se aplica una transformación discreta previa a la entrada del Perceptrón para mapear cada promedio continuo $P_i \in [0, 20]$ a una variable binaria $x_i \in \{0, 1\}$:
 
-$$x_i = \begin{cases} 1 & \text{si } P_i \ge 11 \quad (\text{Unidad Aprobada}) \\ 0 & \text{si } P_i < 11 \quad (\text{Unidad Desaprobada}) \end{cases}$$
+$$x_i = \begin{cases} 1 & \text{si } P_i \ge 12 \quad (\text{Unidad Aprobada}) \\ 0 & \text{si } P_i < 12 \quad (\text{Unidad Desaprobada}) \end{cases}$$
 
 De esta manera, la red neuronal nunca opera sobre el promedio aritmético de las notas; únicamente evalúa el vector binario $(x_1, x_2, x_3)$ y aprende la regla de mayoría:
 
@@ -129,7 +129,7 @@ Su interpretación práctica es directa: cada unidad aprobada aporta **$+0.50$ p
 
 Una vez convergidos los pesos, la inferencia para un estudiante concreto (por ejemplo: $U_1 = 14.0$, $U_2 = 10.0$, $U_3 = 12.5$) sigue el flujo ilustrado en la **Figura 3**:
 
-1. **Binarización de entradas:** $U_1 \ge 11 \to x_1 = 1$, $U_2 < 11 \to x_2 = 0$, $U_3 \ge 11 \to x_3 = 1$.
+1. **Binarización de entradas:** $U_1 \ge 12 \to x_1 = 1$, $U_2 < 12 \to x_2 = 0$, $U_3 \ge 12 \to x_3 = 1$.
 2. **Suma ponderada con sesgo:** $z = (1)(0.50) + (0)(0.50) + (1)(0.50) - 1.00 = 0.00$.
 3. **Función escalón (`hardlim`):** Como $z = 0.00 \ge 0$, la neurona dispara $\hat{y} = 1$ (**ESTUDIANTE APROBADO**).
 
@@ -156,7 +156,7 @@ Para comprobar el papel determinante del sesgo en la clasificación final, se ev
 | :--- | :--- | :--- |
 | **a. 3 promedios (3 unidades)** | El modelo recibe exactamente 3 variables de entrada $(P_1, P_2, P_3) \to (x_1, x_2, x_3)$. | Diagrama de 3 entradas y tabla de $2^3 = 8$ patrones. |
 | **b. Mínimo 2 unidades aprobadas** | Salida deseada $Y_d = 1$ únicamente cuando $\sum x_i \ge 2$. | Verificación 8/8 con error $0$ en la tabla final. |
-| **c. Sin cálculo matemático de promedio final** | La binarización previa descarta la magnitud numérica exacta antes de la inferencia. | **Caso 1:** `(11, 11, 0)` tiene promedio `7.33`, pero la RNA dictamina **APROBADO** (`2` unidades $\ge 11$).<br>**Caso 2:** `(20, 10.5, 10.5)` tiene promedio `13.67`, pero la RNA dictamina **DESAPROBADO** (`1` unidad $\ge 11$). |
+| **c. Sin cálculo matemático de promedio final** | La binarización previa descarta la magnitud numérica exacta antes de la inferencia. | **Caso 1:** `(12, 12, 0)` tiene promedio `8.00`, pero la RNA dictamina **APROBADO** (`2` unidades $\ge 12$).<br>**Caso 2:** `(20, 11.5, 11.5)` tiene promedio `14.33`, pero la RNA dictamina **DESAPROBADO** (`1` unidad $\ge 12$). |
 | **d. Rango de 0 a 20 por unidad** | Controles deslizantes limitados estrictamente a $[0.0,\; 20.0]$. | Imposible ingresar notas fuera del rango permitido. |
 
 ---
@@ -174,6 +174,6 @@ La solución fue implementada en Python bajo una arquitectura modular de tres ar
 ## 7. Conclusiones
 
 1. **Convergencia exacta del Perceptrón Monocapa:** La regla de aprobación por mayoría ($\ge 2$ de 3 unidades) es linealmente separable, permitiendo alcanzar **100 % de precisión en 3 épocas (24 evaluaciones)** con $w = (0.50, 0.50, 0.50)$ y $b = -1.00$.
-2. **Cumplimiento riguroso de las reglas de negocio:** La binarización previa ($P_i \ge 11$) asegura que el sistema evalúe únicamente la cantidad de unidades aprobadas y no el promedio aritmético, comprobado con los contraejemplos `(11, 11, 0)` y `(20, 10.5, 10.5)`.
+2. **Cumplimiento riguroso de las reglas de negocio:** La binarización previa ($P_i \ge 12$) asegura que el sistema evalúe únicamente la cantidad de unidades aprobadas y no el promedio aritmético, comprobado con los contraejemplos `(12, 12, 0)` y `(20, 11.5, 11.5)`.
 3. **Rol determinante del sesgo (*bias*):** Alterar $b = -1.00$ hacia $-0.50$ o $-1.50$ desplaza la frontera $z = 0$ y produce 3 errores al convertir la neurona en compuertas `OR` o `AND`.
 4. **Claridad pedagógica del simulador web:** Integrar el diagrama dinámico de decisión de la neurona, la función escalón y el recorrido por época/patrón permite visualizar y sustentar con claridad cada etapa del ejercicio.

@@ -442,7 +442,7 @@ INDICATORS_ROWS = [
     [
         "c. Sin cálculo de promedio final",
         "La binarización previa descarta la nota continua antes de predecir.",
-        "Caso 1: (11, 11, 0) -> prom. 7.33 pero APROBADO.\nCaso 2: (20, 10.5, 10.5) -> prom. 13.67 pero DESAPROBADO.",
+        "Caso 1: (12, 12, 0) -> prom. 8.00 pero APROBADO.\nCaso 2: (20, 11.5, 11.5) -> prom. 14.33 pero DESAPROBADO.",
     ],
     ["d. Rango de 0 a 20 por unidad", "Controles deslizantes limitados estrictamente a [0.0, 20.0].", "Imposible ingresar notas fuera del rango 0-20."],
 ]
@@ -717,14 +717,14 @@ def build_docx(figs: dict[str, Path]) -> None:
     add_docx_heading(doc, "1.1 Criterio de Binarización", 2)
     add_docx_body(
         doc,
-        "Dado que la nota mínima aprobatoria universitaria es 11, cada nota continua Pi en [0, 20] se transforma "
+        "Dado que la nota mínima aprobatoria en la UPN es 12, cada nota continua Pi en [0, 20] se transforma "
         "en una entrada binaria xi antes de ingresar a la red neuronal:",
     )
     add_docx_formula_box(
         doc,
         [
-            "xi = 1   si Pi >= 11   (Unidad Aprobada)",
-            "xi = 0   si Pi <  11   (Unidad Desaprobada)",
+            "xi = 1   si Pi >= 12   (Unidad Aprobada)",
+            "xi = 0   si Pi <  12   (Unidad Desaprobada)",
             "Regla lógica aprendida:   Yd = 1   si y solo si   x1 + x2 + x3 >= 2",
         ],
     )
@@ -809,7 +809,7 @@ def build_docx(figs: dict[str, Path]) -> None:
 
     add_docx_heading(doc, "7. Conclusiones", 1)
     add_docx_bullet(doc, "Convergencia rápida y exacta: ", "El criterio de mayoría (>= 2 de 3 unidades aprobadas) es linealmente separable, permitiendo que el Perceptrón converja al 100 % de precisión en solo 3 épocas (24 evaluaciones) con w = (0.50, 0.50, 0.50) y b = -1.00.")
-    add_docx_bullet(doc, "Cumplimiento estricto sin promedio aritmético: ", "La binarización previa (Pi >= 11) asegura que la red evalúe únicamente la cantidad de unidades aprobadas, comprobado con los contraejemplos (11, 11, 0) y (20, 10.5, 10.5).")
+    add_docx_bullet(doc, "Cumplimiento estricto sin promedio aritmético: ", "La binarización previa (Pi >= 12) asegura que la red evalúe únicamente la cantidad de unidades aprobadas, comprobado con los contraejemplos (12, 12, 0) y (20, 11.5, 11.5).")
     add_docx_bullet(doc, "Importancia crítica del sesgo: ", "Modificar el sesgo aprendido b = -1.00 hacia -0.50 o -1.50 altera la frontera z = 0 y produce 3 errores sobre los 8 casos posibles.")
     add_docx_bullet(doc, "Valor pedagógico del simulador web: ", "El despliegue interactivo en Streamlit con diagrama dinámico, recorrido por época/patrón y experimentos en tiempo real hace comprensible y verificable todo el proceso de decisión de la RNA.")
 
@@ -1118,7 +1118,7 @@ def build_pdf(figs: dict[str, Path]) -> None:
     story.append(Paragraph("1.1 Criterio de Binarización", s_h2))
     story.append(
         Paragraph(
-            "Con la nota mínima aprobatoria universitaria de 11, cada promedio continuo P<sub>i</sub> se binariza "
+            "Con la nota mínima aprobatoria de la UPN de 12, cada promedio continuo P<sub>i</sub> se binariza "
             "antes de enviarse a la neurona:",
             s_body,
         )
@@ -1126,8 +1126,8 @@ def build_pdf(figs: dict[str, Path]) -> None:
     story.append(
         make_formula_box(
             [
-                "x_i = 1   si P_i >= 11   (Unidad Aprobada)",
-                "x_i = 0   si P_i <  11   (Unidad Desaprobada)",
+                "x_i = 1   si P_i >= 12   (Unidad Aprobada)",
+                "x_i = 0   si P_i <  12   (Unidad Desaprobada)",
                 "Regla de mayoría:   Yd = 1   si y solo si   x1 + x2 + x3 >= 2",
             ]
         )
@@ -1268,7 +1268,7 @@ def build_pdf(figs: dict[str, Path]) -> None:
 
     story.append(make_h1("7. Conclusiones"))
     story.append(Paragraph("• <b>Convergencia exacta:</b> El problema de mayoría (&gt;= 2 de 3 unidades) es linealmente separable y converge al 100 % en 3 épocas (24 evaluaciones) con w = (0.50, 0.50, 0.50) y b = -1.00.", s_bullet))
-    story.append(Paragraph("• <b>Cumplimiento riguroso de reglas:</b> La binarización previa garantiza que no intervenga el promedio aritmético, validado mediante los contraejemplos (11, 11, 0) y (20, 10.5, 10.5).", s_bullet))
+    story.append(Paragraph("• <b>Cumplimiento riguroso de reglas:</b> La binarización previa (P<sub>i</sub> &gt;= 12) garantiza que no intervenga el promedio aritmético, validado mediante los contraejemplos (12, 12, 0) y (20, 11.5, 11.5).", s_bullet))
     story.append(Paragraph("• <b>Papel clave del sesgo:</b> Alterar b = -1.00 a -0.50 o -1.50 desplaza la frontera z = 0 y produce 3 errores al convertir la neurona en compuertas OR o AND.", s_bullet))
     story.append(Paragraph("• <b>Valor pedagógico:</b> El simulador web en Streamlit permite visualizar, recorrer paso a paso y sustentar de manera clara cada etapa de decisión del Perceptrón.", s_bullet))
 

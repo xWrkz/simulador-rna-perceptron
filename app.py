@@ -261,23 +261,23 @@ with st.sidebar:
         width="stretch",
     )
     st.button(
-        "🔥 Regla c: Prom. 7.3 pero APRUEBA (11, 11, 0)",
+        "🔥 Regla c: Prom. 8.0 pero APRUEBA (12, 12, 0)",
         on_click=apply_student_preset,
-        args=(11.0, 11.0, 0.0),
+        args=(12.0, 12.0, 0.0),
         width="stretch",
-        help="Tiene promedio aritmético 7.33, pero aprueba por tener 2 unidades ≥ 11.",
+        help="Tiene promedio aritmético 8.00, pero aprueba por tener 2 unidades ≥ 12.",
     )
     st.button(
-        "🔥 Regla c: Prom. 13.7 pero DESAPRUEBA (20, 10.5, 10.5)",
+        "🔥 Regla c: Prom. 14.3 pero DESAPRUEBA (20, 11.5, 11.5)",
         on_click=apply_student_preset,
-        args=(20.0, 10.5, 10.5),
+        args=(20.0, 11.5, 11.5),
         width="stretch",
-        help="Tiene promedio aritmético 13.67, pero desaprueba por tener solo 1 unidad ≥ 11.",
+        help="Tiene promedio aritmético 14.33, pero desaprueba por tener solo 1 unidad ≥ 12.",
     )
     st.button(
-        "⚖️ Caso límite exacto (11, 10.5, 11)",
+        "⚖️ Caso límite exacto (12, 11.5, 12)",
         on_click=apply_student_preset,
-        args=(11.0, 10.5, 11.0),
+        args=(12.0, 11.5, 12.0),
         width="stretch",
     )
     st.button(
@@ -892,10 +892,10 @@ with tab_theory:
     t1, t2, t3, t4 = st.columns(4)
     with t1:
         st.markdown(
-            """
+            f"""
             <div class="info-box">
                 <h4>1️⃣ Entradas (xᵢ)</h4>
-                <p>Recibe las 3 unidades binarizadas: <code>1</code> si la nota es ≥ 11, o <code>0</code> si es menor.</p>
+                <p>Recibe las 3 unidades binarizadas: <code>1</code> si la nota es ≥ {threshold:g}, o <code>0</code> si es menor.</p>
             </div>
             """,
             unsafe_allow_html=True,
